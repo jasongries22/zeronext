@@ -32,91 +32,19 @@ const TenderAnalyzer = () => {
       // Parse tender data if it's a string
       let parsedTenders = typeof tenders === 'string' ? JSON.parse(tenders) : tenders;
       
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/.netlify/functions/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 3000,
-          messages: [
-            {
-              role: "user",
-              content: `Je bent een expert in het analyseren van Nederlandse overheidstenders. Analyseer de volgende tenders voor dit bedrijf en geef een gestructureerde analyse.
-
-Bedrijfsprofiel:
-${company}
-
-Tenders (JSON):
-${JSON.stringify(parsedTenders)}
-
-Geef je antwoord in het volgende JSON formaat. Gebruik ALLE beschikbare data uit de tender JSON, inclusief contact info, deadlines, CPV codes, etc:
-{
-  "tenderAnalysis": [
-    {
-      "tenderId": "tender title",
-      "matchScore": 85,
-      "reasoning": "Waarom deze tender goed past",
-      "pros": ["pro1", "pro2"],
-      "cons": ["con1", "con2"],
-      "actionability": "high/medium/low",
-      "deadline": "datum uit de tender data",
-      "estimatedValue": "waarde uit publicatie data",
-      "competitionLevel": "high/medium/low",
-      "requiredCapabilities": ["capability1", "capability2"],
-      "missingCapabilities": ["capability1", "capability2"],
-      "tenderUrl": "url uit de tender",
-      "contractingAuthority": "aanbestedende dienst",
-      "contactPerson": "naam uit details",
-      "contactEmail": "email uit details",
-      "contactPhone": "telefoon uit details",
-      "cpvCodes": ["hoofdcode", "bijkomende codes"],
-      "procedure": "procedure type",
-      "referenceNumber": "referentienummer",
-      "publicationDate": "publicatiedatum",
-      "documentsUrl": "link naar documenten",
-      "location": "plaats van uitvoering",
-      "duration": "looptijd"
-    }
-  ],
-  "summary": {
-    "totalOpportunities": 5,
-    "highPriorityCount": 2,
-    "averageMatchScore": 72,
-    "topSectors": ["IT", "Software"],
-    "keyStrengths": ["strength1", "strength2"],
-    "improvementAreas": ["area1", "area2"],
-    "totalEstimatedValue": "som van alle waardes",
-    "nearestDeadline": "dichtstbijzijnde deadline"
-  },
-  "recommendations": [
-    {
-      "priority": "high",
-      "action": "Specifieke actie",
-      "deadline": "datum",
-      "relatedTender": "tender naam"
-    }
-  ],
-  "sectorAnalysis": [
-    {"sector": "IT", "percentage": 40},
-    {"sector": "Software", "percentage": 30},
-    {"sector": "Consulting", "percentage": 30}
-  ]
-}
-
-BELANGRIJK: 
-- Gebruik ALLE beschikbare velden uit de tender data
-- Extract contact informatie uit details__block_email, details__block_telefoon, details__block_contactpersoon
-- Haal waardes uit publicatie__table velden
-- Antwoord ALLEEN met valide JSON, geen andere tekst.`
-            }
-          ]
+          company,
+          tenders: parsedTenders
         })
       });
 
       const data = await response.json();
-      let responseText = data.content[0].text;
+      let responseText = data.content?.[0]?.text || '';
       responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       return JSON.parse(responseText);
     } catch (err) {
