@@ -1,14 +1,25 @@
 const fetch = require('node-fetch');
 
+// WAARSCHUWING: Hardcoded API key is NIET veilig! Alleen tijdelijk gebruiken voor debuggen.
+const HARDCODED_API_KEY = "sk-ant-api03--v3Wf5CwsuzIKk2fNAf9KKU7wH5D2LI3sB0b0fjova6whpsLUd5-jPqld11bi2BFETOg_u_5-2jC6K17y7Db9w-qd8phQAA";
+
 exports.handler = async function(event, context) {
   try {
+    const apiKey = process.env.ANTHROPIC_API_KEY || HARDCODED_API_KEY;
+    if (!apiKey) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Claude API key ontbreekt in environment variables EN fallback.' })
+      };
+    }
+
     const { company, tenders } = JSON.parse(event.body);
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "x-api-key": apiKey,
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
@@ -22,9 +33,23 @@ exports.handler = async function(event, context) {
       })
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = { error: 'Response is not valid JSON', raw: text };
+    }
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ error: `Claude API error: ${response.status} - ${data.error || data.raw || text}` })
+      };
+    }
+
     return {
-      statusCode: response.status,
+      statusCode: 200,
       body: JSON.stringify(data)
     };
   } catch (err) {
