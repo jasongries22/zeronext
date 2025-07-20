@@ -19,7 +19,7 @@ exports.handler = async function(event, context) {
     const prompt = `Je bent een expert in het analyseren van Nederlandse overheidstenders. Analyseer de volgende tenders voor dit bedrijf en geef een gestructureerde analyse.\n\nBedrijfsprofiel:\n${company}\n\nTenders (JSON):\n${JSON.stringify(tenders)}\n\nGeef je antwoord in het volgende JSON formaat. Gebruik ALLE beschikbare data uit de tender JSON, inclusief contact info, deadlines, CPV codes, etc:\n{ ... }\n\nBELANGRIJK: \n- Gebruik ALLE beschikbare velden uit de tender data\n- Extract contact informatie uit details__block_email, details__block_telefoon, details__block_contactpersoon\n- Haal waardes uit publicatie__table velden\n- Antwoord ALLEEN met valide JSON, geen andere tekst.`;
 
     const claudeBody = {
-      model: "claude-3-sonnet-20240229",
+      model: "claude-3.5-sonnet-2024-10-22",
       max_tokens: 3000,
       messages: [
         {
