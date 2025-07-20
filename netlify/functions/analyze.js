@@ -20,6 +20,7 @@ exports.handler = async function(event, context) {
 
     const claudeBody = {
       model: "claude-3.5-sonnet-2024-10-22",
+      max_tokens: 8000,
       messages: [
         {
           role: "user",
