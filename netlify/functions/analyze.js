@@ -15,25 +15,35 @@ exports.handler = async function(event, context) {
 
     const { company, tenders } = JSON.parse(event.body);
 
+    // Bouw de Claude API body
+    const claudeBody = {
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 3000,
+      messages: [
+        {
+          role: "user",
+          content: `Je bent een expert in het analyseren van Nederlandse overheidstenders. Analyseer de volgende tenders voor dit bedrijf en geef een gestructureerde analyse.\n\nBedrijfsprofiel:\n${company}\n\nTenders (JSON):\n${JSON.stringify(tenders)}\n\nGeef je antwoord in het volgende JSON formaat. Gebruik ALLE beschikbare data uit de tender JSON, inclusief contact info, deadlines, CPV codes, etc:\n{ ... }\n\nBELANGRIJK: \n- Gebruik ALLE beschikbare velden uit de tender data\n- Extract contact informatie uit details__block_email, details__block_telefoon, details__block_contactpersoon\n- Haal waardes uit publicatie__table velden\n- Antwoord ALLEEN met valide JSON, geen andere tekst.`
+        }
+      ]
+    };
+
+    // Log de body voor debuggen
+    console.log("Claude API request body:", JSON.stringify(claudeBody));
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 3000,
-        messages: [
-          {
-            role: "user",
-            content: `Je bent een expert in het analyseren van Nederlandse overheidstenders. Analyseer de volgende tenders voor dit bedrijf en geef een gestructureerde analyse.\n\nBedrijfsprofiel:\n${company}\n\nTenders (JSON):\n${JSON.stringify(tenders)}\n\nGeef je antwoord in het volgende JSON formaat. Gebruik ALLE beschikbare data uit de tender JSON, inclusief contact info, deadlines, CPV codes, etc:\n{ ... }\n\nBELANGRIJK: \n- Gebruik ALLE beschikbare velden uit de tender data\n- Extract contact informatie uit details__block_email, details__block_telefoon, details__block_contactpersoon\n- Haal waardes uit publicatie__table velden\n- Antwoord ALLEEN met valide JSON, geen andere tekst.`
-          }
-        ]
-      })
+      body: JSON.stringify(claudeBody)
     });
 
     const text = await response.text();
+    // Log de response voor debuggen
+    console.log("Claude API response status:", response.status);
+    console.log("Claude API response body:", text);
+
     let data;
     try {
       data = JSON.parse(text);
@@ -53,6 +63,7 @@ exports.handler = async function(event, context) {
       body: JSON.stringify(data)
     };
   } catch (err) {
+    console.log("Function error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message })
