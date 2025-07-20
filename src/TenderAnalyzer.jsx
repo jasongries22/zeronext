@@ -187,6 +187,7 @@ const TenderAnalyzer = () => {
           </button>
         </div>
 
+        {/* Resultaat of foutmelding */}
         {error && (
           <Alert className="mb-6 border-red-200 bg-red-50">
             <AlertCircle className="h-4 w-4 text-red-600" />
@@ -194,7 +195,17 @@ const TenderAnalyzer = () => {
           </Alert>
         )}
 
-        {analysis && (
+        {/* Robuuste check op analysis en analysis.summary */}
+        {analysis && (!analysis.summary) && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              Analyse mislukt of geen geldig resultaat ontvangen. Controleer je input of probeer het opnieuw.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {analysis && analysis.summary && (
           <>
             {/* Enhanced Summary Dashboard */}
             <div className="grid md:grid-cols-4 gap-4 mb-8">
