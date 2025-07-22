@@ -13,6 +13,8 @@ import {
 
 
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, PieChart, Pie, Cell } from 'recharts';
 import { Building2, TrendingUp, AlertCircle, CheckCircle, Clock, Euro, MapPin, Tag, Brain, Upload, Loader2, ChevronDown, ChevronUp, ExternalLink, Mail, Phone, FileText, Calendar, Users, Briefcase, Target, Award, BarChart3, Info, Copy, Check } from 'lucide-react';
 
@@ -32,30 +34,196 @@ const TenderAnalyzer = () => {
       // Parse tender data if it's a string
       let parsedTenders = typeof tenders === 'string' ? JSON.parse(tenders) : tenders;
       
-      const response = await fetch("/.netlify/functions/analyze", {
+      // Aggressively compress data - only keep absolutely essential fields
+      const compressedTenders = parsedTenders.map(tender => {
+        // Extract description - truncate if too long
+        let description = tender.details__block_omschrijving || 
+                         tender.publicatie__table_0_procedure_beschrijving || 
+                         "Geen beschrijving";
+        
+        // Truncate description to first 500 characters if longer
+        if (description.length > 500) {
+          description = description.substring(0, 497) + "...";
+        }
+        
+        return {
+          title: tender.title ? tender.title.substring(0, 100) : "Geen titel",
+          url: tender.url,
+          authority: tender.contracting_authority ? tender.contracting_authority.substring(0, 50) : "Onbekend",
+          deadline: tender.deadline || "Geen deadline",
+          desc: description,
+          value: tender.publicatie__table_0_waarde_geraamde_waarde_exclusief_btw || 
+                 tender.details__block_waarde || 
+                 "N/A",
+          cpv: tender.details__block_hoofdopdracht_cpvcode ? 
+               tender.details__block_hoofdopdracht_cpvcode.substring(0, 30) : "N/A",
+          type: tender.details__block_procedure || "Openbaar",
+          loc: tender.publicatie__table_0_plaats_van_uitvoering_aanvullende_informatie || 
+               tender.details__block_plaats_van_uitvoering_nutscode || 
+               "NL"
+        };
+      });
+      
+      // For Opus with high limits, we can handle MANY more tenders
+      const limitedTenders = compressedTenders.slice(0, 100);
+      
+      console.log(`Analyzing ${limitedTenders.length} tenders (compressed from ${parsedTenders.length})`);
+      console.log(`Data size: ~${JSON.stringify(limitedTenders).length} characters`);
+      
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          company,
-          tenders: parsedTenders
+          model: "claude-opus-4-20250514",
+          max_tokens: 8192,
+          messages: [
+            {
+              role: "user",
+              content: `Analyseer deze ${limitedTenders.length} tenders voor het bedrijf. Geef een beknopte analyse.
+
+Bedrijf: ${company}
+
+Tenders:
+${JSON.stringify(limitedTenders)}
+
+Geef een uitgebreide, gedetailleerde JSON analyse met deze structuur:
+{
+  "tenderAnalysis": [
+    {
+      "tenderId": "tender title",
+      "matchScore": 85,
+      "reasoning": "Uitgebreide analyse waarom deze tender past",
+      "pros": ["voordeel 1", "voordeel 2", "voordeel 3"],
+      "cons": ["nadeel 1", "nadeel 2"],
+      "actionability": "high/medium/low",
+      "deadline": "datum",
+      "estimatedValue": "waarde",
+      "competitionLevel": "high/medium/low",
+      "tenderUrl": "url",
+      "contractingAuthority": "naam",
+      "requiredCapabilities": ["vereiste 1", "vereiste 2"],
+      "missingCapabilities": ["ontbreekt 1", "ontbreekt 2"],
+      "strategicAdvice": "Specifiek advies voor deze tender",
+      "winProbability": "high/medium/low"
+    }
+  ],
+  "summary": {
+    "totalOpportunities": 30,
+    "highPriorityCount": 10,
+    "averageMatchScore": 72,
+    "topSectors": ["sector1", "sector2", "sector3"],
+    "nearestDeadline": "datum",
+    "totalEstimatedValue": "€X miljoen",
+    "keyStrengths": ["sterkte 1", "sterkte 2"],
+    "improvementAreas": ["verbetering 1", "verbetering 2"]
+  },
+  "recommendations": [
+    {
+      "priority": "high",
+      "action": "Gedetailleerde actie beschrijving",
+      "deadline": "datum",
+      "relatedTender": "tender naam",
+      "estimatedEffort": "X dagen"
+    }
+  ],
+  "sectorAnalysis": [
+    {"sector": "IT", "percentage": 40, "opportunities": 12},
+    {"sector": "Software", "percentage": 30, "opportunities": 9},
+    {"sector": "Consulting", "percentage": 30, "opportunities": 9}
+  ]
+}
+
+Geef een gedetailleerde, uitgebreide analyse. Gebruik de volledige capaciteit van Claude Opus 4. Antwoord met valide JSON.`
+            }
+          ]
         })
       });
 
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("API Response Error:", errorData);
+        
+        // Check for specific error types
+        if (response.status === 400 && errorData.includes("too many tokens")) {
+          throw new Error("Te veel data - probeer met minder tenders of een kortere bedrijfsomschrijving");
+        } else if (response.status === 429) {
+          throw new Error("Rate limit bereikt - probeer het over een minuut opnieuw");
+        } else if (response.status === 401) {
+          throw new Error("Authenticatie fout - geen geldige API toegang");
+        } else {
+          throw new Error(`API fout (${response.status}): ${errorData.substring(0, 100)}...`);
+        }
+      }
+
       const data = await response.json();
-      let responseText = data.content?.[0]?.text || '';
+      let responseText = data.content[0].text;
       responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      return JSON.parse(responseText);
+      
+      const parsedResponse = JSON.parse(responseText);
+      
+      // Enrich the response with full tender data for display
+      const enrichedResponse = {
+        ...parsedResponse,
+        tenderAnalysis: parsedResponse.tenderAnalysis.map((analysis, idx) => {
+          const originalTender = parsedTenders.find(t => 
+            t.title.includes(analysis.tenderId) || 
+            analysis.tenderId.includes(t.title.substring(0, 30))
+          ) || parsedTenders[idx];
+          
+          return {
+            ...analysis,
+            // Add back full contact details from original data
+            contactPerson: originalTender?.publicatie__table_0_org0001_contactpunt || 
+                          originalTender?.details__block_contactpersoon || "",
+            contactEmail: originalTender?.publicatie__table_0_org0001_email || 
+                         originalTender?.details__block_email || "",
+            contactPhone: originalTender?.publicatie__table_0_org0001_telefoon || 
+                         originalTender?.details__block_telefoon || "",
+            cpvCodes: [originalTender?.details__block_hoofdopdracht_cpvcode || ""],
+            procedure: originalTender?.details__block_procedure || analysis.procedure || "",
+            referenceNumber: originalTender?.details__block_referentienummer || "",
+            location: originalTender?.publicatie__table_0_plaats_van_uitvoering_aanvullende_informatie || 
+                     originalTender?.details__block_plaats_van_uitvoering_nutscode || "Nederland",
+            duration: originalTender?.publicatie__table_0_geraamde_duur_looptijd || "",
+            // Add extra fields from Opus response
+            strategicAdvice: analysis.strategicAdvice || "",
+            winProbability: analysis.winProbability || "medium",
+            // Keep arrays or use from response
+            requiredCapabilities: analysis.requiredCapabilities || [],
+            missingCapabilities: analysis.missingCapabilities || [],
+            publicationDate: "",
+            documentsUrl: ""
+          };
+        })
+      };
+      
+      return enrichedResponse;
     } catch (err) {
       console.error("Claude API Error:", err);
-      throw new Error("Analyse mislukt: " + err.message);
+      
+      // Provide more specific error messages
+      if (err.message.includes("JSON")) {
+        throw new Error("Fout bij verwerken van tender data - controleer JSON formaat");
+      } else if (err.message.includes("Te veel data")) {
+        throw new Error(err.message + " (Tip: gebruik maximaal 300 tekens voor bedrijfsprofiel)");
+      } else {
+        throw new Error("Analyse mislukt: " + err.message);
+      }
     }
   };
 
   const handleAnalyze = async () => {
     if (!companyProfile || !tenderData) {
       setError('Vul beide velden in voordat je analyseert');
+      return;
+    }
+
+    // Check total input size
+    const totalInputSize = companyProfile.length + tenderData.length;
+    if (totalInputSize > 200000) {
+      setError(`Te veel data (${totalInputSize.toLocaleString('nl-NL')} tekens). Maximum is 200.000 tekens totaal.`);
       return;
     }
 
@@ -135,15 +303,21 @@ const TenderAnalyzer = () => {
                 <Building2 className="w-5 h-5" />
                 Bedrijfsprofiel
               </CardTitle>
-              <CardDescription>Beschrijf wat je bedrijf doet, expertise, en diensten</CardDescription>
+              <CardDescription>
+                Beschrijf kort wat je bedrijf doet (max 300 tekens voor beste resultaten)
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <textarea
                 className="w-full h-40 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Bijvoorbeeld: Wij zijn een IT consultancy bedrijf gespecialiseerd in cloud oplossingen, met 50 medewerkers en ervaring in overheidsprojecten..."
+                placeholder="Bijvoorbeeld: Wij zijn een IT consultancy bedrijf gespecialiseerd in cloud oplossingen, Azure, AWS, Office365, met 50+ medewerkers..."
                 value={companyProfile}
                 onChange={(e) => setCompanyProfile(e.target.value)}
+                maxLength={1000}
               />
+              <p className="text-sm text-slate-500 mt-2">
+                {companyProfile.length}/1.000 tekens
+              </p>
             </CardContent>
           </Card>
 
@@ -153,7 +327,11 @@ const TenderAnalyzer = () => {
                 <Upload className="w-5 h-5" />
                 Tender Data (JSON)
               </CardTitle>
-              <CardDescription>Plak de JSON output van je TenderNed scraper</CardDescription>
+              <CardDescription>
+                Plak de JSON output van je TenderNed scraper (max 100 tenders)
+                <br />
+                <span className="text-xs text-slate-500">💡 Pro tip: Minify je JSON om tot 150+ tenders te analyseren!</span>
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <textarea
@@ -161,7 +339,31 @@ const TenderAnalyzer = () => {
                 placeholder='[{"title": "...", "contracting_authority": "...", ...}]'
                 value={tenderData}
                 onChange={(e) => setTenderData(e.target.value)}
+                maxLength={200000}
               />
+              <div className="flex justify-between items-center mt-2">
+                <p className="text-sm text-slate-500">
+                  {(() => {
+                    try {
+                      const parsed = JSON.parse(tenderData);
+                      return `${Array.isArray(parsed) ? parsed.length : 0} tenders gevonden`;
+                    } catch {
+                      return tenderData ? 'Ongeldige JSON' : '';
+                    }
+                  })()}
+                </p>
+                <p className="text-sm text-slate-500">
+                  {tenderData.length.toLocaleString('nl-NL')}/200.000 tekens
+                </p>
+              </div>
+              {tenderData.length > 180000 && (
+                <Alert className="mt-2 border-amber-200 bg-amber-50">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-800 text-sm">
+                    Je nadert de limiet. Minify je JSON voor optimaal gebruik!
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -187,7 +389,6 @@ const TenderAnalyzer = () => {
           </button>
         </div>
 
-        {/* Resultaat of foutmelding */}
         {error && (
           <Alert className="mb-6 border-red-200 bg-red-50">
             <AlertCircle className="h-4 w-4 text-red-600" />
@@ -195,17 +396,7 @@ const TenderAnalyzer = () => {
           </Alert>
         )}
 
-        {/* Robuuste check op analysis en analysis.summary */}
-        {analysis && (!analysis.summary) && (
-          <Alert className="mb-6 border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
-              Analyse mislukt of geen geldig resultaat ontvangen. Controleer je input of probeer het opnieuw.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {analysis && analysis.summary && (
+        {analysis && (
           <>
             {/* Enhanced Summary Dashboard */}
             <div className="grid md:grid-cols-4 gap-4 mb-8">
