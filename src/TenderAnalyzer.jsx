@@ -13,8 +13,6 @@ import {
 
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, PieChart, Pie, Cell } from 'recharts';
 import { Building2, TrendingUp, AlertCircle, CheckCircle, Clock, Euro, MapPin, Tag, Brain, Upload, Loader2, ChevronDown, ChevronUp, ExternalLink, Mail, Phone, FileText, Calendar, Users, Briefcase, Target, Award, BarChart3, Info, Copy, Check } from 'lucide-react';
 
